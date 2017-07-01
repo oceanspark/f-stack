@@ -1,20 +1,12 @@
 # Introduction
 
-Directory `ipc` implements an ipc library using dpdk `rte_ring`, can be used to communicate with F-Stack processes.
+Directory `compat` implements an ipc library using dpdk `rte_ring` and ports some source files compatible with FreeBSD and Linux.
 
 All other directories are useful tools ported from FreeBSD.
-
-# ipc
-
-This is a simple implemention using dpdk `rte_ring`.
-```
-ff_ipc_msg_alloc: get msg structure from rte_mempool.
-ff_ipc_msg_free: put msg to rte_mempool.
-ff_ipc_send: enqueue msg to rte_ring.
-ff_ipc_recv: dequeue msg from rte_ring.
-```
-
 Since F-Stack is multi-process architecture and every process has an independent stack, so we must communicate with every F-Stack process.
+Each tool add an option `-p`(Which F-Stack process to communicate with, default 0), except that, it is same with the original FreeBSD.
+
+Note that these tools must be executed serially.
 
 # sysctl
 Usage:
@@ -22,12 +14,76 @@ Usage:
 sysctl -p <f-stack proc_id> [-bdehiNnoqTtWx] [ -B <bufsize> ] [-f filename] name[=value] ...
 sysctl -p <f-stack proc_id> [-bdehNnoqTtWx] [ -B <bufsize> ] -a
 ```
+For more details, see [Manual page](https://www.freebsd.org/cgi/man.cgi?sysctl).
 
+# ifconfig
+Usage:
 ```
--p   Which F-Stack process to communicate with, default 0. 
+ifconfig -p <f-stack proc_id> [-f type:format] %sinterface address_family
+        [address [dest_address]] [parameters]
+    ifconfig -p <f-stack proc_id> interface create
+    ifconfig -p <f-stack proc_id> -a %s[-d] [-m] [-u] [-v] [address_family]
+    ifconfig -p <f-stack proc_id> -l [-d] [-u] [address_family]
+    ifconfig -p <f-stack proc_id> %s[-d] [-m] [-u] [-v]
 ```
+Unsupported interfaces or parameters:
+```
+inet6
+MAC(Mandatory Access Control)
+media
+SFP/SFP+
+IEEE80211 Wireless
+pfsync
+LAGG LACP
+jail
+```
+For more details, see [Manual page](https://www.freebsd.org/cgi/man.cgi?ifconfig).
 
-Except this option, it is same with the original FreeBSD sysctl, see [Manual page](https://www.freebsd.org/cgi/man.cgi?sysctl).
+# route
+Usage:
+```
+route -p <f-stack proc_id> [-46dnqtv] command [[modifiers] args]
+```
+Examples:
+```
+     Add a default route:
+
+       ./route -p 0 add -net 0.0.0.0/0 192.168.1.1
+
+     A shorter version of adding a default route can also be written as:
+
+       ./route -p 0 add default 192.168.1.1
+
+     Add a static route to the 172.16.10.0/24 network via the 172.16.1.1 gate-
+     way:
+
+       ./route -p 0 add -net 172.16.10.0/24 172.16.1.1
+
+     Change the gateway of an already established static route in the routing
+     table:
+
+       ./route -p 0 change -net 172.16.10.0/24 172.16.1.2
+
+     Display the route for a destination network:
+
+       ./route -p 0 show 172.16.10.0
+
+     Delete a static route from the routing table:
+
+       ./route -p 0 delete -net 172.16.10.0/24 172.16.1.2
+
+     Remove all routes from the routing table:
+
+       ./route -p 0 flush
+
+    FreeBSD uses `netstat -rn ` to list the route table which we havn't ported,
+    you can execute the following command instead, `-d` means debug mode, `-v`
+    means verbose.
+        ./route -p 0 -d -v flush
+```
+Note that, if you want to modify the route table, you must use `-p` to execute the same command for each f-stack process.
+
+For more details, see [Manual page](https://www.freebsd.org/cgi/man.cgi?route).
 
 # how to implement a custom tool for communicating with F-Stack process
 

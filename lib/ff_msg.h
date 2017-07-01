@@ -33,10 +33,12 @@
 #define FF_MSG_RING_OUT "ff_msg_ring_out_"
 #define FF_MSG_POOL     "ff_msg_pool"
 
-/* MSG TYPE: sysctl, sysctlbyname, etc.. */
+/* MSG TYPE: sysctl, ioctl, etc.. */
 enum FF_MSG_TYPE {
     FF_UNKNOWN = 0,
     FF_SYSCTL,
+    FF_IOCTL,
+    FF_ROUTE,
 };
 
 struct ff_sysctl_args {
@@ -46,6 +48,18 @@ struct ff_sysctl_args {
     size_t *oldlenp;
     void *new;
     size_t newlen;
+};
+
+struct ff_ioctl_args {
+    unsigned long cmd;
+    void *data;
+};
+
+struct ff_route_args {
+    int fib;
+    unsigned len;
+    unsigned maxlen;
+    void *data;
 };
 
 #define MAX_MSG_BUF_SIZE 10240
@@ -62,6 +76,8 @@ struct ff_msg {
 
     union {
         struct ff_sysctl_args sysctl;
+        struct ff_ioctl_args ioctl;
+        struct ff_route_args route;
     };
 } __attribute__((packed)) __rte_cache_aligned;
 

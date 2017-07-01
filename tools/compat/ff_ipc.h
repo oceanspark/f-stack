@@ -29,10 +29,13 @@
 
 #include "ff_msg.h"
 
+/* Set F-Stack proccess id to communicate with */
+void ff_set_proc_id(int pid);
+
 struct ff_msg *ff_ipc_msg_alloc(void);
 int ff_ipc_msg_free(struct ff_msg *msg);
 
-int ff_ipc_send(const struct ff_msg *msg, uint16_t proc_id);
-int ff_ipc_recv(struct ff_msg **msg, uint16_t proc_id);
+int ff_ipc_send(const struct ff_msg *msg);
+int ff_ipc_recv(struct ff_msg **msg);
 
 #endif

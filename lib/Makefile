@@ -129,7 +129,7 @@ FF_SRCS+=			\
 	ff_subr_prf.c    \
 	ff_vfs_ops.c  \
 	ff_veth.c  \
-	ff_epoll.c
+	ff_route.c
 
 FF_HOST_SRCS+= \
 	ff_host_interface.c \
@@ -138,6 +138,7 @@ FF_HOST_SRCS+= \
 	ff_dpdk_if.c \
 	ff_dpdk_kni.c \
 	ff_dpdk_pcap.c \
+	ff_epoll.c \
 	ff_init.c
 
 ifdef FF_IPSEC
@@ -232,14 +233,19 @@ MACHINE_SRCS+=		\
 
 NET_SRCS+=		\
 	bpf.c		\
+	bridgestp.c \
 	if.c		\
+	if_bridge.c \
 	if_clone.c	\
 	if_dead.c	\
 	if_ethersubr.c	\
 	if_loop.c	\
 	if_llatbl.c	\
 	in_fib.c	\
+	in_gif.c    \
  	ip_reass.c	\
+	if_vlan.c   \
+	if_vxlan.c  \
 	netisr.c	\
 	pfil.c		\
 	radix.c		\
@@ -252,12 +258,14 @@ NET_SRCS+=		\
 NETINET_SRCS+=		\
 	ip_carp.c	\
 	if_ether.c	\
+	if_gif.c    \
 	igmp.c		\
 	in.c		\
 	in_mcast.c	\
 	in_pcb.c	\
 	in_proto.c	\
 	in_rmx.c	\
+	ip_ecn.c    \
 	ip_encap.c	\
 	ip_fastfwd.c	\
 	ip_icmp.c	\

@@ -39,6 +39,18 @@ static int inited;
 
 static struct rte_mempool *message_pool;
 
+uint16_t ff_proc_id = 0;
+
+void
+ff_set_proc_id(int pid)
+{
+    if (pid < 0 || pid > 65535) {
+        printf("Invalid F-Stack proccess id\n");
+        exit(1);
+    }
+    ff_proc_id = pid;
+}
+
 static int
 ff_ipc_init(void)
 {
@@ -47,9 +59,10 @@ ff_ipc_init(void)
     }
 
     char *dpdk_argv[] = {
-        "-c1", "-n4",
+        "ff-ipc", "-c1", "-n4",
         "--proc-type=secondary",
-        "--log-level=0",
+        /* RTE_LOG_WARNING */
+        "--log-level=5",
     };
 
     int ret = rte_eal_init(sizeof(dpdk_argv)/sizeof(dpdk_argv[0]), dpdk_argv);
@@ -100,7 +113,7 @@ ff_ipc_msg_free(struct ff_msg *msg)
 }
 
 int
-ff_ipc_send(const struct ff_msg *msg, uint16_t proc_id)
+ff_ipc_send(const struct ff_msg *msg)
 {
     int ret;
 
@@ -111,7 +124,7 @@ ff_ipc_send(const struct ff_msg *msg, uint16_t proc_id)
 
     char name[RTE_RING_NAMESIZE];
     snprintf(name, RTE_RING_NAMESIZE, "%s%u",
-        FF_MSG_RING_IN, proc_id);
+        FF_MSG_RING_IN, ff_proc_id);
     struct rte_ring *ring = rte_ring_lookup(name);
     if (ring == NULL) {
         printf("lookup message ring:%s failed!\n", name);
@@ -128,7 +141,7 @@ ff_ipc_send(const struct ff_msg *msg, uint16_t proc_id)
 }
 
 int
-ff_ipc_recv(struct ff_msg **msg, uint16_t proc_id)
+ff_ipc_recv(struct ff_msg **msg)
 {
     int ret, i;
     if (inited == 0) {
@@ -138,7 +151,7 @@ ff_ipc_recv(struct ff_msg **msg, uint16_t proc_id)
 
     char name[RTE_RING_NAMESIZE];
     snprintf(name, RTE_RING_NAMESIZE, "%s%u",
-        FF_MSG_RING_OUT, proc_id);
+        FF_MSG_RING_OUT, ff_proc_id);
     struct rte_ring *ring = rte_ring_lookup(name);
     if (ring == NULL) {
         printf("lookup message ring:%s failed!\n", name);

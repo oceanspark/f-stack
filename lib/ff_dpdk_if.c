@@ -89,6 +89,9 @@
 
 #define BITS_PER_HEX 4
 
+#define KNI_MBUF_MAX 2048
+#define KNI_QUEUE_SIZE 2048
+
 static int enable_kni;
 static int kni_accept;
 
@@ -411,7 +414,10 @@ init_mem_pool(void)
         (nb_rx_queue*RX_QUEUE_SIZE          +
         nb_ports*nb_lcores*MAX_PKT_BURST    +
         nb_ports*nb_tx_queue*TX_QUEUE_SIZE  +
-        nb_lcores*MEMPOOL_CACHE_SIZE),
+        nb_lcores*MEMPOOL_CACHE_SIZE +
+        nb_ports*KNI_MBUF_MAX +
+        nb_ports*KNI_QUEUE_SIZE +
+        nb_lcores*nb_ports*ARP_RING_SIZE),
         (unsigned)8192);
 
     unsigned socketid = 0;
@@ -526,6 +532,7 @@ ff_msg_init(struct rte_mempool *mp,
     void *obj, __attribute__((unused)) unsigned i)
 {
     struct ff_msg *msg = (struct ff_msg *)obj;
+    msg->msg_type = FF_UNKNOWN;
     msg->buf_addr = (char *)msg + sizeof(struct ff_msg);
     msg->buf_len = mp->elt_size - sizeof(struct ff_msg);
 }
@@ -590,7 +597,7 @@ init_kni(void)
     int i, ret;
     for (i = 0; i < nb_ports; i++) {
         uint8_t port_id = ff_global_cfg.dpdk.port_cfgs[i].port_id;
-        ff_kni_alloc(port_id, socket_id, mbuf_pool);
+        ff_kni_alloc(port_id, socket_id, mbuf_pool, KNI_QUEUE_SIZE);
     }
 
     return 0;
@@ -720,7 +727,7 @@ init_port_start(void)
         }
 
         if (rte_eal_process_type() != RTE_PROC_PRIMARY) {
-            return 0;
+            continue;
         }
 
         /* Currently, proc id 1:1 map to queue id per port. */
@@ -851,18 +858,19 @@ ff_veth_input(const struct ff_dpdk_if_context *ctx, struct rte_mbuf *pkt)
         return;
     }
 
-    pkt = pkt->next;
+    struct rte_mbuf *pn = pkt->next;
     void *prev = hdr;
-    while(pkt != NULL) {
+    while(pn != NULL) {
         data = rte_pktmbuf_mtod(pkt, void*);
         len = rte_pktmbuf_data_len(pkt);
 
         void *mb = ff_mbuf_get(prev, data, len);
         if (mb == NULL) {
             ff_mbuf_free(hdr);
+            rte_pktmbuf_free(pkt);
             return;
         }
-        pkt = pkt->next;
+        pn = pn->next;
         prev = mb;
     }
 
@@ -980,6 +988,39 @@ handle_sysctl_msg(struct ff_msg *msg, uint16_t proc_id)
 }
 
 static inline void
+handle_ioctl_msg(struct ff_msg *msg, uint16_t proc_id)
+{
+    int fd, ret;
+    fd = ff_socket(AF_INET, SOCK_DGRAM, 0);
+    if (fd < 0) {
+        ret = -1;
+        goto done;
+    }
+
+    ret = ff_ioctl(fd, msg->ioctl.cmd, msg->ioctl.data);
+
+    ff_close(fd);
+
+done:
+    if (ret < 0) {
+        msg->result = errno;
+    } else {
+        msg->result = 0;
+    }
+
+    rte_ring_enqueue(msg_ring[proc_id].ring[1], msg);
+}
+
+static inline void
+handle_route_msg(struct ff_msg *msg, uint16_t proc_id)
+{
+    msg->result = ff_rtioctl(msg->route.fib, msg->route.data,
+        &msg->route.len, msg->route.maxlen);
+
+    rte_ring_enqueue(msg_ring[proc_id].ring[1], msg);
+}
+
+static inline void
 handle_default_msg(struct ff_msg *msg, uint16_t proc_id)
 {
     msg->result = EINVAL;
@@ -992,6 +1033,12 @@ handle_msg(struct ff_msg *msg, uint16_t proc_id)
     switch (msg->msg_type) {
         case FF_SYSCTL:
             handle_sysctl_msg(msg, proc_id);
+            break;
+        case FF_IOCTL:
+            handle_ioctl_msg(msg, proc_id);
+            break;
+        case FF_ROUTE:
+            handle_route_msg(msg, proc_id);
             break;
         default:
             handle_default_msg(msg, proc_id);
